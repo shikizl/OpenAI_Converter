@@ -1,0 +1,13 @@
+# Binary
+openai-converter
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+.history/
