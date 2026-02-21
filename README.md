@@ -56,22 +56,40 @@ go build -o openai-converter .
 
 服务器默认在 `http://0.0.0.0:9090` 启动。
 
-### 使用 Docker（可选）
+### 使用 Docker Compose（推荐）
 
-```dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY go.mod ./
-COPY *.go ./
-RUN go build -o openai-converter .
+```bash
+# 克隆项目
+git clone <repo-url>
+cd OPENAI_CONVERTER
 
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-WORKDIR /app
-COPY --from=builder /app/openai-converter .
-COPY .env .
-EXPOSE 9090
-CMD ["./openai-converter"]
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env 填入你的 API 配置
+
+# 一键启动
+docker compose up -d
+
+# 查看日志
+docker compose logs -f
+
+# 停止
+docker compose down
+```
+
+也可以不创建 `.env` 文件，直接通过环境变量启动：
+
+```bash
+RESPONSES_API_BASE_URL=https://your-api.com \
+RESPONSES_API_KEY=sk-xxx \
+docker compose up -d
+```
+
+自定义端口：
+
+```bash
+PORT=8080 docker compose up -d
+# 服务将在 http://localhost:8080 启动
 ```
 
 ## 配置
