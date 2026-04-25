@@ -347,8 +347,13 @@ func ConvertResponsesToChatRequest(respReq *ResponsesRequest) ([]byte, error) {
 						messages = append(messages, m)
 
 					default:
+						role := im.Role
+						if role == "developer" {
+							role = "user"
+						}
 						m := map[string]interface{}{
-							"role": im.Role,
+							"role":    role,
+							"content": "",
 						}
 						if im.Content != nil {
 							m["content"] = convertResponsesContentToChat(im.Content)
@@ -639,7 +644,7 @@ func convertResponsesContentToChat(raw json.RawMessage) interface{} {
 		var result []map[string]interface{}
 		for _, p := range parts {
 			switch p.Type {
-			case "input_text":
+			case "input_text", "output_text", "text":
 				result = append(result, map[string]interface{}{
 					"type": "text",
 					"text": p.Text,
@@ -655,11 +660,6 @@ func convertResponsesContentToChat(raw json.RawMessage) interface{} {
 					img["image_url"].(map[string]interface{})["detail"] = p.Detail
 				}
 				result = append(result, img)
-			case "text":
-				result = append(result, map[string]interface{}{
-					"type": "text",
-					"text": p.Text,
-				})
 			default:
 				var raw2 map[string]interface{}
 				b, _ := json.Marshal(p)
