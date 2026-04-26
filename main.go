@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -20,6 +21,9 @@ type Config struct {
 
 	Host string
 	Port int
+
+	DefaultEnvAPIKey string
+	LogToFile        string
 }
 
 var cfg Config
@@ -32,6 +36,8 @@ func loadConfig() {
 	flag.StringVar(&cfg.CompletionsAPIKey, "completions-key", envOrDefault("COMPLETIONS_API_KEY", ""), "Upstream Chat Completions API key")
 	flag.StringVar(&cfg.Host, "host", envOrDefault("HOST", "0.0.0.0"), "Server host")
 	flag.IntVar(&cfg.Port, "port", envIntOrDefault("PORT", 9090), "Server port")
+	flag.StringVar(&cfg.DefaultEnvAPIKey, "default-env-key", envOrDefault("DEFAULT_ENV_API_KEY", ""), "Whether to use env API key")
+	flag.StringVar(&cfg.LogToFile, "log-to-file", envOrDefault("LOG_TO_FILE", ""), "Whether write log to file")
 	flag.Parse()
 }
 
@@ -43,10 +49,10 @@ func envOrDefault(key, def string) string {
 }
 
 func envIntOrDefault(key string, def int) int {
-	if v := os.Getenv(key); v != "" {
-		var n int
-		fmt.Sscanf(v, "%d", &n)
-		if n > 0 {
+	v := os.Getenv(key)
+	if v != "" {
+		n, err := strconv.Atoi(v)
+		if err == nil {
 			return n
 		}
 	}
@@ -157,6 +163,12 @@ func loadDotEnv(filename string) {
 		}
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
+		// Strip surrounding quotes (single or double)
+		if len(val) >= 2 {
+			if (val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'') {
+				val = val[1 : len(val)-1]
+			}
+		}
 		// Don't override existing env vars
 		if os.Getenv(key) == "" {
 			os.Setenv(key, val)

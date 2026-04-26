@@ -16,7 +16,7 @@ import (
 
 func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	apiKey := extractAPIKey(r)
-	if apiKey == "" {
+	if apiKey == "" || cfg.DefaultEnvAPIKey == "1" {
 		apiKey = cfg.ResponsesAPIKey
 	}
 
@@ -282,7 +282,7 @@ func handleChatStreamViaResponses(w http.ResponseWriter, url, apiKey string, req
 
 func handleResponses(w http.ResponseWriter, r *http.Request) {
 	apiKey := extractAPIKey(r)
-	if apiKey == "" {
+	if apiKey == "" || cfg.DefaultEnvAPIKey == "1" {
 		apiKey = cfg.CompletionsAPIKey
 	}
 
@@ -668,8 +668,14 @@ func handleResponsesStreamViaChat(w http.ResponseWriter, url, apiKey string, req
 
 func handlePassthrough(w http.ResponseWriter, r *http.Request) {
 	apiKey := extractAPIKey(r)
-	if apiKey == "" {
-		apiKey = cfg.ResponsesAPIKey
+	if apiKey == "" || cfg.DefaultEnvAPIKey == "1" {
+		// Default to Responses API key, but prefer Completions API key
+		// for chat-completions-like paths
+		if strings.Contains(r.URL.Path, "/chat/") {
+			apiKey = cfg.CompletionsAPIKey
+		} else {
+			apiKey = cfg.ResponsesAPIKey
+		}
 	}
 
 	upstreamURL := cfg.ResponsesAPIBaseURL + r.URL.Path
