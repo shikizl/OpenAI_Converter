@@ -53,7 +53,7 @@ func ConvertChatToResponsesRequest(chatReq *ChatCompletionsRequest) ([]byte, err
 						"id":        tc.ID,
 						"call_id":   tc.ID,
 						"name":      tc.Function.Name,
-						"arguments": tc.Function.Arguments,
+						"arguments": sanitizeArguments(tc.Function.Arguments),
 						"status":    "completed",
 					})
 				}
@@ -339,7 +339,7 @@ func ConvertResponsesToChatRequest(respReq *ResponsesRequest) ([]byte, error) {
 									"type": "function",
 									"function": map[string]interface{}{
 										"name":      im.Name,
-										"arguments": im.Arguments,
+										"arguments": sanitizeArguments(im.Arguments),
 									},
 								},
 							},
@@ -783,4 +783,51 @@ func convertID(id, prefix string) string {
 
 func generateID(prefix string) string {
 	return fmt.Sprintf("%s%d", prefix, time.Now().UnixNano())
+}
+
+// sanitizeArguments sanitizes a tool_call arguments string for upstream APIs.
+// Some upstream APIs (e.g. nvidia/vLLM) are strict about the arguments field:
+//   - Control characters (\n, \r, \t, etc.) in the string are rejected
+//   - The arguments string must be valid JSON (some APIs parse it as JSON)
+//
+// This function:
+//  1. Strips control characters (replacing \n/\r/\t with space, removing others)
+//  2. Validates that the result is valid JSON; if not, wraps it in {"raw": "..."}
+//     so that the upstream API can at least parse the outer JSON structure
+func sanitizeArguments(s string) string {
+	// Step 1: Remove control characters
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, ch := range s {
+		if ch < 0x20 {
+			switch ch {
+			case '\n', '\r':
+				b.WriteByte(' ')
+			case '\t':
+				b.WriteByte(' ')
+			default:
+				// Remove other control characters
+			}
+		} else {
+			b.WriteRune(ch)
+		}
+	}
+	cleaned := b.String()
+
+	// Step 2: Validate JSON — if the arguments are not valid JSON,
+	// wrap them in a {"raw": "..."} object so the upstream API
+	// doesn't fail with a parse error.
+	// Empty string is allowed (some tool calls have no arguments).
+	if cleaned == "" || json.Valid([]byte(cleaned)) {
+		return cleaned
+	}
+
+	// Arguments are not valid JSON — wrap them
+	wrapper := map[string]string{"raw": cleaned}
+	wrapped, err := json.Marshal(wrapper)
+	if err != nil {
+		// Last resort: empty JSON object
+		return "{}"
+	}
+	return string(wrapped)
 }

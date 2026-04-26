@@ -16,6 +16,8 @@ type Config struct {
 	LogLevel  string
 
 	DefaultEnvAPIKey string
+	ResponsesModel   string
+	CompletionsModel string
 
 	// Direction 1: Chat Completions client → upstream Responses API
 	ResponsesAPIBaseURL string
@@ -36,6 +38,8 @@ func loadConfig() {
 	flag.StringVar(&cfg.LogLevel, "log-level", envOrDefault("LOG_LEVEL", "info"), "Log level: debug/info/warn/error")
 	flag.StringVar(&cfg.LogToFile, "log-to-file", envOrDefault("LOG_TO_FILE", ""), "Whether write log to file")
 	flag.StringVar(&cfg.DefaultEnvAPIKey, "default-env-key", envOrDefault("DEFAULT_ENV_API_KEY", ""), "Whether to use env API key")
+	flag.StringVar(&cfg.ResponsesModel, "responses-model", envOrDefault("RESPONSES_MODEL", ""), "Responses model to use")
+	flag.StringVar(&cfg.CompletionsModel, "completions-model", envOrDefault("COMPLETIONS_MODEL", ""), "Completions model to use")
 	flag.StringVar(&cfg.ResponsesAPIBaseURL, "responses-url", envOrDefault("RESPONSES_API_BASE_URL", "https://codex.viloze.com"), "Upstream Responses API base URL")
 	flag.StringVar(&cfg.ResponsesAPIKey, "responses-key", envOrDefault("RESPONSES_API_KEY", ""), "Upstream Responses API key")
 	flag.StringVar(&cfg.CompletionsAPIBaseURL, "completions-url", envOrDefault("COMPLETIONS_API_BASE_URL", "https://api.openai.com"), "Upstream Chat Completions API base URL")

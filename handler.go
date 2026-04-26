@@ -34,6 +34,10 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if cfg.ResponsesModel != "" {
+		chatReq.Model = cfg.ResponsesModel
+	}
+
 	log.Info().Str("model", chatReq.Model).Bool("stream", chatReq.Stream).Int("messages", len(chatReq.Messages)).Msg("[chat→resp] request")
 
 	respBody, err := ConvertChatToResponsesRequest(&chatReq)
@@ -68,7 +72,7 @@ func handleChatNonStream(w http.ResponseWriter, url, apiKey string, reqBody []by
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Warn().Int("status", resp.StatusCode).Str("body", string(respBody)).Msg("[chat→resp] upstream error")
+		log.Debug().Int("status", resp.StatusCode).Str("body", string(respBody)).Msg("[chat→resp] upstream error")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
@@ -97,13 +101,15 @@ func handleChatStreamViaResponses(w http.ResponseWriter, url, apiKey string, req
 		writeError(w, http.StatusBadGateway, "upstream error: "+err.Error())
 		return
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(resp.Body)
+		log.Debug().Int("status", resp.StatusCode).Str("body", string(respBody)).Msg("[chat→resp] upstream error")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
-		w.Write(body)
+		w.Write(respBody)
 		return
 	}
 
@@ -300,6 +306,10 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if cfg.CompletionsModel != "" {
+		respReq.Model = cfg.CompletionsModel
+	}
+
 	log.Info().Str("model", respReq.Model).Bool("stream", respReq.Stream).Msg("[resp→chat] request")
 
 	chatBody, err := ConvertResponsesToChatRequest(&respReq)
@@ -334,6 +344,7 @@ func handleResponsesNonStream(w http.ResponseWriter, url, apiKey string, reqBody
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		log.Debug().Int("status", resp.StatusCode).Str("body", string(respBody)).Msg("[resp→chat] upstream error")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
@@ -365,10 +376,11 @@ func handleResponsesStreamViaChat(w http.ResponseWriter, url, apiKey string, req
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(resp.Body)
+		log.Debug().Int("status", resp.StatusCode).Str("body", string(respBody)).Msg("[resp→chat] upstream error")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
-		w.Write(body)
+		w.Write(respBody)
 		return
 	}
 
@@ -707,6 +719,11 @@ func handlePassthrough(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		log.Debug().Int("status", resp.StatusCode).Str("body", string(respBody)).Msg("[passthrough] upstream error")
+	}
 
 	for k, v := range resp.Header {
 		for _, vv := range v {
