@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // ==================== Direction 1: /v1/chat/completions → upstream /v1/responses ====================
@@ -33,7 +34,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[chat→resp] model=%s stream=%v messages=%d", chatReq.Model, chatReq.Stream, len(chatReq.Messages))
+	log.Info().Str("model", chatReq.Model).Bool("stream", chatReq.Stream).Int("messages", len(chatReq.Messages)).Msg("[chat→resp] request")
 
 	respBody, err := ConvertChatToResponsesRequest(&chatReq)
 	if err != nil {
@@ -41,7 +42,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[chat→resp] converted body: %s", truncateLog(string(respBody), 2000))
+	log.Debug().Str("body", string(respBody)).Msg("[chat→resp] converted body")
 
 	upstreamURL := cfg.ResponsesAPIBaseURL + "/v1/responses"
 
@@ -67,7 +68,7 @@ func handleChatNonStream(w http.ResponseWriter, url, apiKey string, reqBody []by
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[chat→resp] upstream error %d: %s", resp.StatusCode, truncateLog(string(respBody), 1000))
+		log.Warn().Int("status", resp.StatusCode).Str("body", string(respBody)).Msg("[chat→resp] upstream error")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
@@ -299,7 +300,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[resp→chat] model=%s stream=%v", respReq.Model, respReq.Stream)
+	log.Info().Str("model", respReq.Model).Bool("stream", respReq.Stream).Msg("[resp→chat] request")
 
 	chatBody, err := ConvertResponsesToChatRequest(&respReq)
 	if err != nil {
@@ -307,7 +308,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[resp→chat] converted body: %s", truncateLog(string(chatBody), 500))
+	log.Debug().Str("body", string(chatBody)).Msg("[resp→chat] converted body")
 
 	upstreamURL := cfg.CompletionsAPIBaseURL + "/v1/chat/completions"
 
@@ -731,7 +732,7 @@ func doUpstreamRequest(url, apiKey string, body []byte) (*http.Response, error) 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Accept", "text/event-stream")
 
-	log.Printf("[upstream] POST %s (%d bytes)", url, len(body))
+	log.Info().Str("url", url).Int("bytes", len(body)).Msg("[upstream] POST")
 	return httpClient.Do(req)
 }
 
@@ -744,7 +745,7 @@ func extractAPIKey(r *http.Request) string {
 }
 
 func writeError(w http.ResponseWriter, code int, msg string) {
-	log.Printf("[error] %d: %s", code, msg)
+	log.Error().Int("code", code).Str("msg", msg).Msg("[error]")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -779,11 +780,4 @@ func makeChatChunk(id string, created int64, model string) ChatCompletionsRespon
 			},
 		},
 	}
-}
-
-func truncateLog(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }

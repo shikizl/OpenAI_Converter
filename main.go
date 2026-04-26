@@ -3,14 +3,20 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 type Config struct {
+	LogToFile string
+	LogLevel  string
+
+	DefaultEnvAPIKey string
+
 	// Direction 1: Chat Completions client → upstream Responses API
 	ResponsesAPIBaseURL string
 	ResponsesAPIKey     string
@@ -21,23 +27,21 @@ type Config struct {
 
 	Host string
 	Port int
-
-	DefaultEnvAPIKey string
-	LogToFile        string
 }
 
 var cfg Config
 
 func loadConfig() {
 	// Command line flags (override env vars)
+	flag.StringVar(&cfg.LogLevel, "log-level", envOrDefault("LOG_LEVEL", "info"), "Log level: debug/info/warn/error")
+	flag.StringVar(&cfg.LogToFile, "log-to-file", envOrDefault("LOG_TO_FILE", ""), "Whether write log to file")
+	flag.StringVar(&cfg.DefaultEnvAPIKey, "default-env-key", envOrDefault("DEFAULT_ENV_API_KEY", ""), "Whether to use env API key")
 	flag.StringVar(&cfg.ResponsesAPIBaseURL, "responses-url", envOrDefault("RESPONSES_API_BASE_URL", "https://codex.viloze.com"), "Upstream Responses API base URL")
 	flag.StringVar(&cfg.ResponsesAPIKey, "responses-key", envOrDefault("RESPONSES_API_KEY", ""), "Upstream Responses API key")
 	flag.StringVar(&cfg.CompletionsAPIBaseURL, "completions-url", envOrDefault("COMPLETIONS_API_BASE_URL", "https://api.openai.com"), "Upstream Chat Completions API base URL")
 	flag.StringVar(&cfg.CompletionsAPIKey, "completions-key", envOrDefault("COMPLETIONS_API_KEY", ""), "Upstream Chat Completions API key")
 	flag.StringVar(&cfg.Host, "host", envOrDefault("HOST", "0.0.0.0"), "Server host")
 	flag.IntVar(&cfg.Port, "port", envIntOrDefault("PORT", 9090), "Server port")
-	flag.StringVar(&cfg.DefaultEnvAPIKey, "default-env-key", envOrDefault("DEFAULT_ENV_API_KEY", ""), "Whether to use env API key")
-	flag.StringVar(&cfg.LogToFile, "log-to-file", envOrDefault("LOG_TO_FILE", ""), "Whether write log to file")
 	flag.Parse()
 }
 
@@ -63,6 +67,10 @@ func main() {
 	// Load .env file if present
 	loadDotEnv(".env")
 	loadConfig()
+
+	// Initialize logger (writes to both stderr and logs/{date}.log when enabled)
+	logger := initLogger()
+	defer logger.Close()
 
 	mux := http.NewServeMux()
 
@@ -106,19 +114,19 @@ func main() {
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
-	log.Println("========================================")
-	log.Println("  OpenAI API Converter Proxy")
-	log.Println("========================================")
-	log.Printf("  Listening on: http://%s", addr)
-	log.Printf("  Responses upstream: %s", cfg.ResponsesAPIBaseURL)
-	log.Printf("  Completions upstream: %s", cfg.CompletionsAPIBaseURL)
-	log.Println("")
-	log.Println("  /v1/chat/completions → upstream Responses API")
-	log.Println("  /v1/responses        → upstream Chat Completions API")
-	log.Println("========================================")
+	log.Info().Msg("========================================")
+	log.Info().Msg(" OpenAI API Converter Proxy")
+	log.Info().Msg("========================================")
+	log.Info().Str("addr", addr).Msg("Listening on")
+	log.Info().Str("upstream", cfg.ResponsesAPIBaseURL).Msg("Responses upstream")
+	log.Info().Str("upstream", cfg.CompletionsAPIBaseURL).Msg("Completions upstream")
+	log.Info().Msg("")
+	log.Info().Msg(" /v1/chat/completions → upstream Responses API")
+	log.Info().Msg(" /v1/responses → upstream Chat Completions API")
+	log.Info().Msg("========================================")
 
 	if err := http.ListenAndServe(addr, corsMiddleware(loggingMiddleware(mux))); err != nil {
-		log.Fatalf("Server error: %v", err)
+		log.Fatal().Err(err).Msg("Server error")
 	}
 }
 
@@ -141,7 +149,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 // Logging middleware
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[%s] %s %s", r.Method, r.URL.Path, r.RemoteAddr)
+		log.Info().Str("method", r.Method).Str("path", r.URL.Path).Str("remote", r.RemoteAddr).Msg("request")
 		next.ServeHTTP(w, r)
 	})
 }
